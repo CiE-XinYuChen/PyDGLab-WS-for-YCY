@@ -5,6 +5,7 @@ description = "役次元 (YCY/YOKONEX) 设备蓝牙直连 Python 库"
 authors = ["Ljzd-PRO <ljzd@office.ljzd-pro.asia>", "CiE-XinYuChen"]
 readme = "README.md"
 repository = "https://github.com/CiE-XinYuChen/PyDGLab-WS-for-YCY"
+packages = [{include = "pydglab_ws"}]
 
 keywords = ["dg-lab", "dg-lab-v3", "websocket", "library", "os-independent", "ble", "bluetooth", "ycy", "yokonex"]
 classifiers = [
