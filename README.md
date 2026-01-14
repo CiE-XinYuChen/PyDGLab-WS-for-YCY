@@ -120,6 +120,29 @@ if __name__ == "__main__":
 - `stop_channel()` - 停止单个通道输出
 - `stop_all()` - 停止所有输出 (双通道 + 马达)
 
+## 🔄 兼容层
+
+本项目提供与原版 `pydglab-ws` 完全兼容的接口。`DGLabWSServer` 已自动指向 BLE 版本，
+现有项目（如 YCY-VRCOSC）**无需任何代码修改**，只需安装本库即可使用 BLE 直连：
+
+```bash
+# 卸载原版
+pip uninstall pydglab-ws
+
+# 安装本库
+pip install -e /path/to/PyDGLab-WS-for-YCY
+```
+
+原有代码可直接运行：
+
+```python
+from pydglab_ws import DGLabWSServer  # 自动使用 BLE 版本
+
+async with DGLabWSServer() as server:
+    client = server.new_local_client()
+    # ...
+```
+
 ## 📖 文档
 
 - [API 参考](docs/API.md) - 完整的接口文档

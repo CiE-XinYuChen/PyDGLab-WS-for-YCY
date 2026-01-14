@@ -4,8 +4,11 @@
 提供 DG-Lab API 兼容接口，同时支持役次元扩展功能。
 """
 import asyncio
+import logging
 import uuid
 from typing import AsyncGenerator, Any, Optional, Type, TypeVar, Union
+
+logger = logging.getLogger(__name__)
 
 from bleak import BleakClient
 from bleak.backends.device import BLEDevice
@@ -70,6 +73,10 @@ class YCYBLEClient:
         self._channel_b_strength = 1
         self._channel_a_enabled = False
         self._channel_b_enabled = False
+
+        # 通道模式缓存 (预设模式)
+        self._channel_a_mode: YCYMode = YCYMode.PRESET_1
+        self._channel_b_mode: YCYMode = YCYMode.PRESET_1
 
         # 虚拟强度上限 (DG-Lab 兼容)
         self._strength_limit = strength_limit
@@ -156,10 +163,14 @@ class YCYBLEClient:
         if self.connected:
             return True
 
-        self._client = BleakClient(self._device_address)
+        self._client = BleakClient(
+            self._device_address,
+            disconnected_callback=self._on_disconnect
+        )
         try:
             await self._client.connect()
             self._connected = True
+            logger.info(f"BLE 设备已连接: {self._device_address}")
 
             # 启动通知
             await self._client.start_notify(NOTIFY_CHAR_UUID, self._notification_handler)
@@ -169,9 +180,15 @@ class YCYBLEClient:
             self._waveform_player_b = _WaveformPlayer(self, Channel.B)
 
             return True
-        except Exception:
+        except Exception as e:
+            logger.error(f"BLE 连接失败: {type(e).__name__}: {e}")
             self._connected = False
             return False
+
+    def _on_disconnect(self, client: BleakClient):
+        """BLE 设备断开连接回调"""
+        logger.warning(f"BLE 设备已断开连接: {self._device_address}")
+        self._connected = False
 
     async def disconnect(self):
         """断开 BLE 连接"""
@@ -276,21 +293,24 @@ class YCYBLEClient:
             self._channel_a_strength = ycy_strength
             self._channel_a_enabled = enabled
             ycy_channel = YCYChannel.A
+            current_mode = self._channel_a_mode
         else:
             self._channel_b_strength = ycy_strength
             self._channel_b_enabled = enabled
             ycy_channel = YCYChannel.B
+            current_mode = self._channel_b_mode
 
-        # 构建并发送命令
+        # 构建并发送命令，保持当前预设模式
         command = YCYBLEProtocol.build_channel_control(
             channel=ycy_channel,
             enabled=enabled,
             strength=ycy_strength,
-            mode=YCYMode.CUSTOM,  # 使用自定义模式
-            frequency=50,         # 默认频率
-            pulse_width=50        # 默认脉冲宽度
+            mode=current_mode,  # 保持当前预设模式
+            frequency=0,
+            pulse_width=0
         )
 
+        logger.info(f"set_strength: channel={channel}, strength={ycy_strength}, mode={current_mode.name}, cmd={command.hex()}")
         return await self._send_command(command)
 
     async def add_pulses(
@@ -373,11 +393,15 @@ class YCYBLEClient:
     async def data_generator(
         self,
         *targets: _DataType,
+        poll_interval: float = 1.0,
     ) -> AsyncGenerator[Union[StrengthData, RetCode], Any]:
         """
         数据生成器 (DG-Lab 兼容接口)
 
+        定期轮询设备状态并返回 StrengthData，与 WebSocket 版本行为一致。
+
         :param targets: 目标类型过滤
+        :param poll_interval: 轮询间隔 (秒)
         :yield: 强度数据或状态码
         """
         while True:
@@ -385,9 +409,18 @@ class YCYBLEClient:
                 yield RetCode.CLIENT_DISCONNECTED
                 break
 
-            data = await self.recv_data()
-            if not targets or type(data) in targets:
-                yield data
+            try:
+                # 返回当前强度数据
+                data = self.strength_data
+                if not targets or type(data) in targets:
+                    yield data
+
+                # 等待下次轮询
+                await asyncio.sleep(poll_interval)
+
+            except Exception:
+                yield RetCode.CLIENT_DISCONNECTED
+                break
 
     # ==================== 役次元扩展接口 ====================
 
@@ -491,6 +524,58 @@ class YCYBLEClient:
 
         return await self._send_command(command)
 
+    async def set_pulse_preset(self, channel: Channel, preset_index: int) -> bool:
+        """
+        设置通道波形预设 (使用 DG-Lab 预设索引)
+
+        将 DG-Lab 预设索引映射到 YCY 内置预设模式，设备会自动循环播放该预设波形。
+        这种方式比自定义模式更稳定，不需要持续发送波形数据。
+
+        :param channel: 通道选择
+        :param preset_index: DG-Lab 预设索引 (0-15)
+            0=呼吸, 1=潮汐, 2=连击, 3=快速按捏, 4=按捏渐强, 5=心跳节奏,
+            6=压缩, 7=节奏步伐, 8=颗粒摩擦, 9=渐变弹跳, 10=波浪涟漪,
+            11=雨水冲刷, 12=变速敲击, 13=信号灯, 14=挑逗1, 15=挑逗2
+        :return: 是否成功
+        """
+        if not self.connected:
+            logger.warning(f"set_pulse_preset: 设备未连接")
+            raise DisconnectedError()
+
+        from ..ble.utils import dglab_preset_to_ycy_mode
+
+        ycy_mode = dglab_preset_to_ycy_mode(preset_index)
+        ycy_channel = YCYChannel.A if channel == Channel.A else YCYChannel.B
+
+        # 更新模式缓存（即使强度为0也要记住模式，下次设置强度时会使用）
+        if channel == Channel.A:
+            self._channel_a_mode = ycy_mode
+            strength = self._channel_a_strength
+            enabled = self._channel_a_enabled
+        else:
+            self._channel_b_mode = ycy_mode
+            strength = self._channel_b_strength
+            enabled = self._channel_b_enabled
+
+        logger.info(f"set_pulse_preset: 已缓存模式 channel={channel}, mode={ycy_mode.name}")
+
+        # 如果通道未启用，只缓存模式不发送命令（下次设置强度时会带上模式）
+        if not enabled or strength <= 1:
+            logger.info(f"set_pulse_preset: 仅缓存模式，跳过发送 (enabled={enabled}, strength={strength})")
+            return True
+
+        command = YCYBLEProtocol.build_channel_control(
+            channel=ycy_channel,
+            enabled=True,
+            strength=strength,
+            mode=ycy_mode,
+            frequency=0,
+            pulse_width=0
+        )
+
+        logger.info(f"set_pulse_preset: channel={channel}, preset={preset_index}, mode={ycy_mode.name}, strength={strength}, cmd={command.hex()}")
+        return await self._send_command(command)
+
     async def set_custom_wave(
         self,
         channel: Channel,
@@ -506,6 +591,7 @@ class YCYBLEClient:
         :return: 是否成功
         """
         if not self.connected:
+            logger.warning(f"set_custom_wave: 设备未连接")
             raise DisconnectedError()
 
         ycy_channel = YCYChannel.A if channel == Channel.A else YCYChannel.B
@@ -518,6 +604,17 @@ class YCYBLEClient:
             strength = self._channel_b_strength
             enabled = self._channel_b_enabled
 
+        # 如果通道未启用（强度为0），跳过发送
+        if not enabled or strength <= 1:
+            # 每 50 次记录一次跳过日志，避免刷屏
+            if not hasattr(self, '_skip_count'):
+                self._skip_count = {}
+            ch_key = str(channel)
+            self._skip_count[ch_key] = self._skip_count.get(ch_key, 0) + 1
+            if self._skip_count[ch_key] % 50 == 1:
+                logger.info(f"set_custom_wave: 跳过发送 (通道={channel}, enabled={enabled}, strength={strength}, 已跳过{self._skip_count[ch_key]}次)")
+            return True  # 返回成功但不发送命令
+
         command = YCYBLEProtocol.build_channel_control(
             channel=ycy_channel,
             enabled=enabled,
@@ -526,6 +623,14 @@ class YCYBLEClient:
             frequency=frequency,
             pulse_width=pulse_width
         )
+
+        # 每 10 次记录一次发送日志
+        if not hasattr(self, '_send_count'):
+            self._send_count = {}
+        ch_key = str(channel)
+        self._send_count[ch_key] = self._send_count.get(ch_key, 0) + 1
+        if self._send_count[ch_key] % 10 == 1:
+            logger.info(f"set_custom_wave: 发送命令 channel={channel}, strength={strength}, freq={frequency}, pw={pulse_width}, cmd={command.hex()}")
 
         return await self._send_command(command)
 
@@ -688,16 +793,21 @@ class _WaveformPlayer:
 
     async def add(self, *pulses: PulseOperation):
         """添加波形到队列"""
+        added_count = 0
         for pulse in pulses:
             freq, pulse_width = convert_pulse(pulse)
             try:
                 self._queue.put_nowait((freq, pulse_width))
+                added_count += 1
             except asyncio.QueueFull:
                 # 队列满时丢弃
                 pass
 
+        logger.info(f"波形队列 {self._channel}: 添加了 {added_count} 条波形, 队列大小: {self._queue.qsize()}, 播放器运行中: {self._running}")
+
         # 确保播放器在运行
         if not self._running:
+            logger.info(f"波形播放器 {self._channel} 未运行，正在启动...")
             await self.start()
 
     async def clear(self):
@@ -728,18 +838,30 @@ class _WaveformPlayer:
 
     async def _playback_loop(self):
         """播放循环 - 每 100ms 下发一次"""
+        logger.info(f"波形播放器 {self._channel} 已启动")
+        play_count = 0
         while self._running:
             try:
                 freq, pulse_width = await asyncio.wait_for(
                     self._queue.get(), timeout=0.1
                 )
-                await self._client.set_custom_wave(
+                play_count += 1
+                if play_count % 10 == 1:  # 每10次记录一次
+                    logger.info(f"播放波形 {self._channel}: freq={freq}, pulse_width={pulse_width}, 已播放{play_count}次")
+                result = await self._client.set_custom_wave(
                     self._channel, freq, pulse_width
                 )
+                if not result:
+                    logger.warning(f"波形播放器 {self._channel}: set_custom_wave 返回 False")
                 await asyncio.sleep(0.1)  # 100ms 间隔
             except asyncio.TimeoutError:
                 continue
             except asyncio.CancelledError:
+                logger.info(f"波形播放器 {self._channel} 被取消")
                 break
-            except Exception:
+            except Exception as e:
+                logger.error(f"波形播放器 {self._channel} 异常: {type(e).__name__}: {e}")
+                import traceback
+                logger.error(traceback.format_exc())
                 continue
+        logger.info(f"波形播放器 {self._channel} 已停止, 共播放 {play_count} 次")

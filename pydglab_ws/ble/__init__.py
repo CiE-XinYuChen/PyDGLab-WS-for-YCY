@@ -2,7 +2,6 @@
 役次元 (YCY) BLE 模块
 
 此模块提供役次元设备的蓝牙直连功能。
-需要安装可选依赖: pip install pydglab-ws[ble]
 """
 
 from .enums import *

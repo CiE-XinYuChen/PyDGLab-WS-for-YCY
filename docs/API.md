@@ -4,11 +4,69 @@
 
 ## 目录
 
+- [兼容层 (DGLabBLEServer)](#兼容层-dglabbleserver)
 - [扫描设备](#扫描设备)
 - [连接管理](#连接管理)
 - [DG-Lab 兼容接口](#dg-lab-兼容接口)
 - [役次元扩展接口](#役次元扩展接口)
 - [枚举类型](#枚举类型)
+
+---
+
+## 兼容层 (DGLabBLEServer)
+
+`DGLabBLEServer` 提供与原版 `DGLabWSServer` 相同的接口，但内部使用 BLE 直连。
+
+**注意：** 在本库中，`DGLabWSServer` 已自动指向 `DGLabBLEServer`，现有项目无需任何代码修改。
+
+### 基本用法
+
+```python
+from pydglab_ws import DGLabWSServer  # 自动使用 BLE 版本
+
+async with DGLabWSServer() as server:
+    client = server.new_local_client()
+    # client 支持所有 DG-Lab 兼容接口
+    await client.set_strength(Channel.A, StrengthOperationType.SET_TO, 50)
+    ...
+```
+
+### 构造参数
+
+```python
+DGLabBLEServer(
+    device_address=None,      # 指定设备地址，None 则自动扫描
+    scan_timeout=5.0,         # 扫描超时 (秒)
+    strength_limit=200,       # 虚拟强度上限
+    on_scan_complete=None,    # 扫描完成回调
+    # 以下参数为兼容 DGLabWSServer，实际不使用
+    host=None,
+    port=None,
+    heartbeat_interval=None,
+)
+```
+
+### 指定设备地址
+
+```python
+async with DGLabBLEServer(device_address="XX:XX:XX:XX:XX:XX") as server:
+    client = server.new_local_client()
+    ...
+```
+
+### 自定义设备选择
+
+```python
+def select_device(devices):
+    # 显示设备列表让用户选择
+    for i, d in enumerate(devices):
+        print(f"[{i}] {d.name}")
+    return int(input("选择设备: "))
+
+async with DGLabBLEServer(on_scan_complete=select_device) as server:
+    client = server.new_local_client()
+    ...
+```
 
 ---
 

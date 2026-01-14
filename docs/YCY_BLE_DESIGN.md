@@ -1175,7 +1175,143 @@ pytest tests/ble/ -v --cov=pydglab_ws.ble --cov-report=html
 
 ---
 
-## 10. 参考资料
+## 10. 已知限制
+
+### 10.1 波形兼容性限制
+
+> ⚠️ **重要**: DG-Lab 波形数据无法完美映射到 YCY 设备
+
+#### 问题描述
+
+DG-Lab 和 YCY 的波形系统存在根本性差异，导致通过 `add_pulses()` 接口发送的 DG-Lab 波形数据无法在 YCY 设备上产生预期效果。
+
+| 特性 | DG-Lab | YCY | 兼容性 |
+|------|--------|-----|--------|
+| 波形定义 | 软件定义，每100ms发送数据 | 设备内置16种预设 | ❌ 不兼容 |
+| 频率参数 | 10-240 (内部参数，非Hz) | 1-100 Hz (真实频率) | ❌ 语义不同 |
+| 动态变化 | 支持频率+强度同时变化 | 仅支持固定模式参数 | ❌ 无法模拟 |
+| 波形队列 | 最多500条 (50秒) | 不支持队列 | ⚠️ 软件模拟 |
+
+#### DG-Lab 波形格式
+```python
+# 每条数据代表 100ms
+((freq1, freq2, freq3, freq4), (str1, str2, str3, str4))
+# freq: 10-240 (DG-Lab 内部参数，不是真正的 Hz)
+# str: 0-100 (强度百分比)
+```
+
+#### YCY 自定义模式
+```python
+# 固定参数，设备持续输出
+frequency: 1-100  # 真实的脉冲重复频率 (Hz)
+pulse_width: 0-100  # 脉冲宽度 (us)
+```
+
+#### 当前实现的问题
+
+当前 `add_pulses()` 实现尝试将 DG-Lab 波形数据转换为 YCY 自定义模式：
+
+```python
+def convert_pulse(pulse: PulseOperation) -> Tuple[int, int]:
+    frequencies, strengths = pulse
+    freq = 100  # 固定使用 100Hz
+    pulse_width = sum(strengths) // 4  # 强度平均值
+    return (freq, pulse_width)
+```
+
+**问题**：
+1. DG-Lab 的 `freq` 参数含义与 YCY 的 `frequency` 完全不同
+2. DG-Lab 波形效果依赖频率+强度的**动态变化**，而 YCY 只能输出固定参数
+3. 转换后的效果与原始 DG-Lab 波形预设差异很大
+
+### 10.2 推荐方案
+
+#### 方案 A: 使用 YCY 内置预设模式 (推荐)
+
+YCY 设备有 16 种内置预设模式 (`PRESET_1` 到 `PRESET_16`)，设备会自动循环播放波形效果。
+
+```python
+from pydglab_ws.client import YCYBLEClient
+from pydglab_ws.ble.enums import YCYMode
+
+async with YCYBLEClient("XX:XX:XX:XX:XX:XX") as client:
+    # 设置强度
+    await client.set_strength(Channel.A, StrengthOperationType.SET_TO, 50)
+
+    # 使用 YCY 内置预设 (推荐)
+    await client.set_mode(Channel.A, YCYMode.PRESET_1)
+```
+
+**优点**：
+- 设备固件内置波形效果，稳定可靠
+- 不需要持续发送数据
+- 无通信延迟和丢包问题
+
+**API 接口**：
+```python
+# 直接使用 YCY 预设模式
+await client.set_mode(channel: Channel, mode: YCYMode) -> bool
+
+# 或使用 DG-Lab 预设索引 (自动映射)
+await client.set_pulse_preset(channel: Channel, preset_index: int) -> bool
+```
+
+**预设映射表**：
+```python
+# DG-Lab 预设索引 -> YCY 预设模式
+DGLAB_PRESET_TO_YCY = {
+    0: YCYMode.PRESET_1,   # 呼吸
+    1: YCYMode.PRESET_2,   # 潮汐
+    2: YCYMode.PRESET_3,   # 连击
+    3: YCYMode.PRESET_4,   # 快速按捏
+    4: YCYMode.PRESET_5,   # 按捏渐强
+    5: YCYMode.PRESET_6,   # 心跳节奏
+    6: YCYMode.PRESET_7,   # 压缩
+    7: YCYMode.PRESET_8,   # 节奏步伐
+    8: YCYMode.PRESET_9,   # 颗粒摩擦
+    9: YCYMode.PRESET_10,  # 渐变弹跳
+    10: YCYMode.PRESET_11, # 波浪涟漪
+    11: YCYMode.PRESET_12, # 雨水冲刷
+    12: YCYMode.PRESET_13, # 变速敲击
+    13: YCYMode.PRESET_14, # 信号灯
+    14: YCYMode.PRESET_15, # 挑逗1
+    15: YCYMode.PRESET_16, # 挑逗2
+}
+```
+
+> **注意**: DG-Lab 和 YCY 的预设效果可能不完全相同，需要实际测试确认映射关系。
+
+#### 方案 B: 使用 add_pulses() (有限兼容)
+
+如果必须使用 `add_pulses()` 接口，需要了解以下限制：
+
+```python
+# 仍可使用，但效果与 DG-Lab 设备不同
+await client.add_pulses(Channel.A, *pulse_data)
+```
+
+**限制**：
+- 波形效果与 DG-Lab 原始预设差异较大
+- 需要持续发送数据维持输出
+- 可能存在通信延迟和抖动
+
+### 10.3 上层应用适配建议
+
+对于需要同时支持 DG-Lab 和 YCY 设备的应用，建议：
+
+```python
+# 检测是否为 BLE 模式（YCY 设备）
+if hasattr(client, 'set_pulse_preset'):
+    # YCY BLE 模式: 使用内置预设
+    await client.set_pulse_preset(channel, preset_index)
+else:
+    # DG-Lab WebSocket 模式: 发送波形数据
+    await client.add_pulses(channel, *pulse_data)
+```
+
+---
+
+## 11. 参考资料
 
 - [役次元蓝牙通讯协议 V1.6](./YCY-YOKONEX-OpenSource/Bluetooth/役次元电击蓝牙通讯.pdf)
 - [DG-Lab Socket 协议](./PROTOCOL.md)
