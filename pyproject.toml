@@ -8,7 +8,7 @@ homepage = "https://pydglab-ws.readthedocs.io"
 repository = "https://github.com/Ljzd-PRO/PyDGLab-WS"
 documentation = "https://pydglab-ws.readthedocs.io"
 
-keywords = ["dg-lab", "dg-lab-v3", "websocket", "library", "os-independent"]
+keywords = ["dg-lab", "dg-lab-v3", "websocket", "library", "os-independent", "ble", "bluetooth", "ycy", "yokonex"]
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: BSD License",
@@ -40,6 +40,13 @@ pytest-timeout = "^2.3.1"
 optional = true
 
 [tool.poetry.group.test]
+optional = true
+
+[tool.poetry.extras]
+ble = ["bleak"]
+
+[tool.poetry.dependencies.bleak]
+version = ">=0.21.0"
 optional = true
 
 [build-system]

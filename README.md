@@ -3,7 +3,8 @@
 </h1>
 
 <p align="center">
-  一个用于创建郊狼 3.0 DG-Lab App Socket 控制终端和服务端的 Python 库
+  一个用于创建郊狼 3.0 DG-Lab App Socket 控制终端和服务端的 Python 库<br>
+  支持役次元 (YCY/YOKONEX) 设备蓝牙直连
 </p>
 
 <p align="center">
@@ -47,6 +48,7 @@
 - 可部署第三方终端与 Socket 服务一体的服务端，降低部署复杂度和延迟
 - 使用异步生成器、上下文管理器等，结合语言特性
 - 通过 Pydantic, 枚举 管理消息结构和常量，便于开发
+- **支持役次元 (YCY/YOKONEX) 设备蓝牙直连** (可选功能)
 
 ### 🔧 DG-Lab App 的 Socket 被控功能支持的操作
 
@@ -66,8 +68,24 @@
 
 ### 🔨 安装
 
+**从 PyPI 安装:**
+
 ```bash
 pip3 install pydglab-ws
+```
+
+**从源码安装 (包含 BLE 支持):**
+
+```bash
+# 克隆仓库
+git clone https://github.com/Ljzd-PRO/PyDGLab-WS.git
+cd PyDGLab-WS
+
+# 安装 (包含 BLE 支持)
+pip3 install -e ".[ble]"
+
+# 或仅安装基础功能
+pip3 install -e .
 ```
 
 ### 📡 搭建服务端
@@ -175,6 +193,77 @@ if __name__ == "__main__":
 
 更多演示请查看 [`examples/local_client_with_server.py`](examples/server_with_local_client.py)
 
+### 🔵 役次元 BLE 蓝牙直连
+
+通过蓝牙直接连接役次元 (YCY/YOKONEX) 设备，无需通过 App 中转，延迟更低。
+
+> [!Note]
+> BLE 功能需要安装 `bleak` 依赖，请使用源码安装：`pip3 install -e ".[ble]"`
+
+```python3
+import asyncio
+from pydglab_ws import YCYBLEClient, YCYScanner
+from pydglab_ws import Channel, StrengthOperationType
+
+
+async def main():
+    # 扫描设备
+    print("正在扫描役次元设备...")
+    devices = await YCYScanner.scan(timeout=5.0)
+
+    if not devices:
+        print("未找到设备")
+        return
+
+    print(f"找到设备: {devices[0]}")
+
+    # 连接设备
+    async with YCYBLEClient(devices[0].address) as client:
+        print("已连接")
+
+        # 获取电池电量
+        battery = await client.get_battery()
+        print(f"电池电量: {battery}%")
+
+        # 设置 A 通道强度 (DG-Lab 兼容接口)
+        await client.set_strength(Channel.A, StrengthOperationType.SET_TO, 50)
+
+        # 或使用役次元扩展接口
+        from pydglab_ws.ble import YCYMode
+        await client.set_mode(Channel.A, YCYMode.PRESET_1)
+
+        # 接收数据更新
+        async for data in client.data_generator():
+            print(f"收到数据: {data}")
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+#### 🔧 役次元 BLE 支持的操作
+
+**DG-Lab 兼容接口:**
+- `set_strength()` - 设置通道强度 (自动映射 0-200 → 1-276)
+- `add_pulses()` - 添加波形到队列 (软件模拟)
+- `clear_pulses()` - 清空波形队列
+- `data_generator()` - 数据生成器
+- `recv_data()` - 接收数据
+
+**DG-Lab 兼容属性:**
+- `client_id` - 终端 ID (基于设备地址生成)
+- `target_id` - 设备 ID (基于设备地址生成)
+- `strength_data` - 当前强度数据
+- `not_registered` / `not_bind` - 连接状态
+- `bind()` / `rebind()` / `ensure_bind()` - 绑定方法 (BLE 模式下连接即绑定)
+
+**役次元扩展接口:**
+- `get_battery()` - 获取电池电量
+- `set_motor()` - 控制马达
+- `set_mode()` - 设置 16 种预设模式
+- `set_custom_wave()` - 设置自定义波形 (频率 + 脉冲宽度)
+- `get_electrode_status()` - 获取电极连接状态
+
 ## 📌 更多
 
 如果您在开发过程中，发现要实现一些常用的功能时并不方便，或者您有什么建议能够使开发更简单快捷，欢迎在 Issues 中提出~
@@ -200,4 +289,4 @@ if __name__ == "__main__":
 
 PyDGLab-WS 使用 BSD 3-Clause 许可证.
 
-Copyright © 2024 by Ljzd-PRO.
+Copyright © 2024-2025 by Ljzd-PRO.
