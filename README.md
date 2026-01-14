@@ -11,36 +11,12 @@
 > 如需使用 DG-Lab App，请使用 [原版 PyDGLab-WS](https://github.com/Ljzd-PRO/PyDGLab-WS)。
 
 <p align="center">
-  <a href="https://pydglab-ws.readthedocs.io">📖 完整文档</a>
-</p>
-
-<p align="center">
-  <a href="https://www.codefactor.io/repository/github/ljzd-pro/pydglab-ws">
-    <img src="https://www.codefactor.io/repository/github/ljzd-pro/pydglab-ws/badge" alt="CodeFactor" />
-  </a>
-
-  <a href="https://codecov.io/gh/Ljzd-PRO/PyDGLab-WS" target="_blank">
-      <img src="https://codecov.io/gh/Ljzd-PRO/PyDGLab-WS/branch/master/graph/badge.svg?token=VTr0LB1yWF" alt="codecov"/>
-  </a>
-
-  <a href="https://github.com/Ljzd-PRO/PyDGLab-WS/actions/workflows/codecov.yml" target="_blank">
-    <img alt="Test Result" src="https://img.shields.io/github/actions/workflow/status/Ljzd-PRO/PyDGLab-WS/codecov.yml">
-  </a>
-
-  <a href='https://pydglab-ws.readthedocs.io/'>
-    <img src='https://readthedocs.org/projects/pydglab-ws/badge/?version=latest' alt='Documentation Status' />
-  </a>
-
-  <a href="https://github.com/Ljzd-PRO/PyDGLab-WS/activity">
-    <img src="https://img.shields.io/github/last-commit/Ljzd-PRO/PyDGLab-WS/master" alt="Last Commit"/>
+  <a href="https://github.com/CiE-XinYuChen/PyDGLab-WS-for-YCY">
+    <img src="https://img.shields.io/github/last-commit/CiE-XinYuChen/PyDGLab-WS-for-YCY/master" alt="Last Commit"/>
   </a>
 
   <a href="./LICENSE">
-    <img src="https://img.shields.io/github/license/Ljzd-PRO/PyDGLab-WS" alt="BSD 3-Clause"/>
-  </a>
-
-  <a href="https://pypi.org/project/pydglab-ws" target="_blank">
-    <img src="https://img.shields.io/github/v/release/Ljzd-PRO/PyDGLab-WS?logo=python" alt="Version">
+    <img src="https://img.shields.io/github/license/CiE-XinYuChen/PyDGLab-WS-for-YCY" alt="BSD 3-Clause"/>
   </a>
 </p>
 
@@ -69,8 +45,8 @@
 **从源码安装:**
 
 ```bash
-git clone https://github.com/Ljzd-PRO/PyDGLab-WS.git
-cd PyDGLab-WS
+git clone https://github.com/CiE-XinYuChen/PyDGLab-WS-for-YCY.git
+cd PyDGLab-WS-for-YCY
 pip3 install -e .
 ```
 
@@ -142,27 +118,15 @@ if __name__ == "__main__":
 
 ## 📌 更多
 
-如果您在开发过程中，发现要实现一些常用的功能时并不方便，或者您有什么建议能够使开发更简单快捷，欢迎在 Issues 中提出~
-
-### 相关项目
-
-下列为采用了 PyDGLab-WS 的一些项目：
-- [Ljzd-PRO/nonebot-plugin-dg-lab-play](https://github.com/Ljzd-PRO/nonebot-plugin-dg-lab-play)：nonebot2 机器人插件 - ⚡在群里和大家一起玩郊狼吧！⚡
-- [Ljzd-PRO/HL2-DGLabInjuryExperienceMod](https://github.com/Ljzd-PRO/HL2-DGLabInjuryExperienceMod)：半条命 2 模组 - 用郊狼⚡模拟一下自己和敌人的受伤痛觉~
-  > 其中的 PyDGLab-WS-Connector
-
-如果你的项目也应用了 PyDGLab-WS，欢迎在 Issues 页面分享。
+如果您在开发过程中，发现要实现一些常用的功能时并不方便，或者您有什么建议能够使开发更简单快捷，欢迎在 [Issues](https://github.com/CiE-XinYuChen/PyDGLab-WS-for-YCY/issues) 中提出~
 
 ### 🔗 链接
 
-- PyPI: 🔗[pydglab-ws](https://pypi.org/project/pydglab-ws/)
-
-### 📐 代码覆盖率
-
-![codecov.io](https://codecov.io/github/Ljzd-PRO/PyDGLab-WS/graphs/tree.svg?token=VTr0LB1yWF)
+- 本项目: [CiE-XinYuChen/PyDGLab-WS-for-YCY](https://github.com/CiE-XinYuChen/PyDGLab-WS-for-YCY)
+- 原版 PyDGLab-WS: [Ljzd-PRO/PyDGLab-WS](https://github.com/Ljzd-PRO/PyDGLab-WS)
 
 ### 许可证
 
 PyDGLab-WS 使用 BSD 3-Clause 许可证.
 
-Copyright © 2024-2025 by Ljzd-PRO.
+Copyright © 2024-2025 by Ljzd-PRO, CiE-XinYuChen.

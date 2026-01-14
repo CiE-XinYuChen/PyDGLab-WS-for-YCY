@@ -7,4 +7,4 @@ from .typing import *
 from .utils import *
 from .ble import *
 
-__version__ = "1.1.0"
+__version__ = "1.2.0"
