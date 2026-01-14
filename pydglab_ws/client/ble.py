@@ -572,6 +572,93 @@ class YCYBLEClient:
 
         return await self._send_command(command)
 
+    async def stop_channel(self, channel: Channel) -> bool:
+        """
+        停止通道输出
+
+        :param channel: 通道选择
+        :return: 是否成功
+        """
+        if not self.connected:
+            raise DisconnectedError()
+
+        # 停止该通道的波形播放器
+        if channel == Channel.A and self._waveform_player_a:
+            await self._waveform_player_a.stop()
+            await self._waveform_player_a.clear()
+        elif channel == Channel.B and self._waveform_player_b:
+            await self._waveform_player_b.stop()
+            await self._waveform_player_b.clear()
+
+        ycy_channel = YCYChannel.A if channel == Channel.A else YCYChannel.B
+
+        # 更新缓存
+        if channel == Channel.A:
+            self._channel_a_enabled = False
+        else:
+            self._channel_b_enabled = False
+
+        # 注意: mode 必须是有效值 (0x01-0x10 或 0x11), 不能用 0x00
+        command = YCYBLEProtocol.build_channel_control(
+            channel=ycy_channel,
+            enabled=False,
+            strength=1,
+            mode=YCYMode.PRESET_1,  # 使用有效模式
+            frequency=0,
+            pulse_width=0
+        )
+
+        return await self._send_command(command)
+
+    async def stop_all(self) -> bool:
+        """
+        停止所有输出 (双通道 + 马达)
+
+        :return: 是否成功
+        """
+        if not self.connected:
+            raise DisconnectedError()
+
+        # 停止波形播放器
+        if self._waveform_player_a:
+            await self._waveform_player_a.stop()
+            await self._waveform_player_a.clear()
+        if self._waveform_player_b:
+            await self._waveform_player_b.stop()
+            await self._waveform_player_b.clear()
+
+        # 更新缓存
+        self._channel_a_enabled = False
+        self._channel_b_enabled = False
+
+        # 停止 A 通道
+        cmd_a = YCYBLEProtocol.build_channel_control(
+            channel=YCYChannel.A,
+            enabled=False,
+            strength=1,
+            mode=YCYMode.PRESET_1,
+            frequency=0,
+            pulse_width=0
+        )
+        await self._send_command(cmd_a)
+
+        # 停止 B 通道
+        cmd_b = YCYBLEProtocol.build_channel_control(
+            channel=YCYChannel.B,
+            enabled=False,
+            strength=1,
+            mode=YCYMode.PRESET_1,
+            frequency=0,
+            pulse_width=0
+        )
+        await self._send_command(cmd_b)
+
+        # 停止马达
+        cmd_motor = YCYBLEProtocol.build_motor_control(MotorState.OFF)
+        await self._send_command(cmd_motor)
+
+        return True
+
     # ==================== 静态方法 ====================
 
     @staticmethod
