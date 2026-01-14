@@ -9,6 +9,7 @@
 > [!Important]
 > **本分支仅支持役次元 (YCY) 设备蓝牙直连，不再支持郊狼 DG-Lab App。**
 > 如需使用 DG-Lab App，请使用 [原版 PyDGLab-WS](https://github.com/Ljzd-PRO/PyDGLab-WS)。
+> 特别说明，本项目不得用于商业用途。若您使用了本项目中的部分代码，请一并开源且标注本仓库、原仓库的指向性链接
 
 <p align="center">
   <a href="https://github.com/CiE-XinYuChen/PyDGLab-WS-for-YCY">
